@@ -7,7 +7,7 @@ https://github.com/togg53192-cmd/jailbreaks （已内置于 `templates/`）。
 
 | 文件 | 导出 | 作用 |
 |---|---|---|
-| `index.ts` | `.`（server） | `session.hook("context")` 注入模板；注册 `jailbreak.run` RPC |
+| `index.ts` | `.`（server） | 注入、抹除、继承、重试；`jailbreak.run` / `state` / `patch` RPC |
 | `tui.tsx` | `./tui` | 终端斜杠命令 `/jailbreak`（keymap layer） |
 | `gui.tsx` | `./gui-experimental` | Desktop 命令 / 斜杠命令（`ctx.add(Command)`） |
 | `rpc.ts` | `./rpc` | server ↔ TUI/GUI 的 RPC 契约 |
@@ -50,23 +50,28 @@ bunx vite build        # 生成 dist/gui-experimental.cjs
 /jailbreak clear [目标]
 /jailbreak rewrite <on|off>
 /jailbreak strip <on|off>
+/jailbreak scrub <on|off>
 /jailbreak retry <on|off|0-5>
-/jailbreak allow <on|off>
+/jailbreak allow <on|off|all|action,action>
 /jailbreak agents <*|id,id>
 /jailbreak session <on|off|clear>
 ```
 
-Desktop 还可在命令面板（Ctrl+Shift+P）搜索 “Jailbreak prompt control”。
+Desktop 还可在命令面板（Ctrl+Shift+P）搜索 “Jailbreak prompt control”，
+或在 **Settings > Jailbreak** 里改。输入框上方的药丸显示当前会话是 `off` 还是实际用到的卡。
+TUI 在提示符状态栏显示同一行。`/jailbreak set` 不带参数时弹出模板选择。
 结果以对话框显示，无需模型参与。
 
 默认对所有 agent 生效。`agents` 收成白名单后，只有列出的 agent 会被注入；
 `session on` 强制当前会话开，`session off` 强制关，两者都压过 agent 白名单。
-`on` / `off` 是总开关。
+分叉出来的会话和子会话没有自己的开关时，沿 `parentID`、再沿 `fork` 继承，最多 4 层。
+`session clear` 去掉自己的开关，改回继承。`on` / `off` 是总开关。
 
 `rewrite` 只改发往模型的用户文本（命中安全意图词才加一句研究语境，不写回历史）。
 `strip` 删掉其他 system 段里单独成行的「我不能 / I cannot」句。
-`retry` 在会话空闲、最后一条是拒答且没有工具调用时，自动补一句「继续」再试，默认最多 2 次。
-`allow` 默认关。打开后把权限询问从 `ask` 改成 `allow`，显式 `deny` 不动。
+`scrub` 默认开。发出去的请求里，没有工具调用的助手拒答会被换成一句撤回说明，历史原文不动；压缩摘要看到的也是换成之后的记录。
+`retry` 在会话空闲、最后一条是拒答且没有工具调用时，自动补一句「继续」再试。供应商把请求打成安全类错误时，同样在 `retry` 上限内再送一次，并在下一次正式请求的系统提示后加那句「继续」。文本拒答和安全错误共用这个上限，默认 2。限流、鉴权和上下文过长不干预。
+`allow` 默认关。打开后把权限询问从 `ask` 改成 `allow`，显式 `deny` 和组织策略不动。`allow shell,edit` 只放行这些动作；`allow all` 恢复全部。已存的 `allow: true` 且没有动作列表时，仍是全部放行。
 
 换卡不用改代码：把 `<key>.md` 丢进下面这个目录，同名文件覆盖内置模板。
 
